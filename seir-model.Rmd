@@ -1,0 +1,152 @@
+---
+title: "Replication of Atkeson (2020) SEIR model"
+author: 
+- affiliation: Bank of Israel
+  name: Itamar Caspi  
+  email: itamar.caspi@boi.org.il
+date: '(updated: `r Sys.Date()`)'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    keep_md: no
+    theme: journal
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+abstract: |
+  The code below replicates the results in Atkeson's (2020) SEIR model with a time varying reproduction number. 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  error   = FALSE
+)
+```
+
+## Load packages
+```{r}
+library(deSolve)   # for solving ODE's
+library(tidyverse) # for data wrangling and plotting
+```
+
+## Set initial values
+```{r}
+I_init <- 1e-07
+E_init <- 3 * I_init
+R_init <- 0
+S_init <- 1 - I_init - E_init - R_init
+
+R0_1_init   <- 10
+R0_2_init   <- -4
+R0_init     <- 0.5 * (R0_1_init + R0_2_init)
+
+init <- c(
+  S    = S_init,
+  E    = E_init,
+  I    = I_init,
+  R    = R_init,
+  R0_1 = R0_1_init,
+  R0_2 = R0_2_init,
+  R0   = R0_init
+)
+```
+
+## Set parameters
+```{r}
+pi_r    <- 1 / 18
+pi_e    <- 1 / 5.2
+R0_1bar <- -4
+R0_2bar <- 10
+eta1    <- 1 / 35
+eta2    <- 1 / 100
+
+parameters <- c(
+  pi_r    = pi_r,
+  pi_e    = pi_e,
+  R0_1bar = R0_1bar,
+  R0_2bar = R0_2bar,
+  eta1    = eta1,
+  eta2    = eta2
+)
+```
+
+## Set time frame
+```{r}
+times <- seq(0, 548, by = 1)
+```
+
+## Formulate the SIR model
+```{r}
+sir <- function(time, state, parameters) {
+
+  with(as.list(c(state, parameters)), {
+
+    dS = -0.5 * (R0_1 + R0_2) * pi_r * S * I
+    dE =  0.5 * (R0_1 + R0_2) * pi_r * S * I - pi_e * E
+    dI =  pi_e * E - pi_r * I
+    dR =  pi_r * I
+    
+    dR0_1 = -eta1 * (R0_1 - R0_1bar)
+    dR0_2 = -eta2 * (R0_2 - R0_2bar)
+    dR0   = -0.5 * eta1 * (R0_1 - R0_1bar) -0.5 * eta2 * (R0_2 - R0_2bar)
+    
+    results = c (dS, dE, dI, dR, dR0_1, dR0_2, dR0)
+    list (results)
+  })
+}
+```
+
+
+## Solve ODE
+```{r}
+out <- ode(
+  y = init,
+  times = times,
+  func = sir,
+  parms = parameters
+)
+```
+
+## Plot pandemic progress
+```{r}
+out_long <- out %>% 
+  as.data.frame() %>%
+  select(time, S, E, I, R) %>% 
+  pivot_longer(-time, names_to = "group", values_to = "prop")
+
+out_long %>% 
+  filter(group == "I", time <= 200) %>% 
+  ggplot(aes(x = time, y = prop * 100, color = group)) +
+  geom_line(size = 1) + 
+  theme_light() + 
+  labs(
+    x = "days",
+    y = "% of population"
+  )
+```
+
+## Plot R_t
+```{r}
+R0_long <- out %>% 
+  as.data.frame() %>%
+  select(time, R0, R0_1, R0_2) %>% 
+  pivot_longer(-time, names_to = "type", values_to = "value")
+
+R0_long %>% 
+  filter(type == "R0", time <=200) %>% 
+  ggplot(aes(x = time, y = value, color = type)) +
+  geom_line(size = 1) + 
+  theme_light() + 
+  labs(
+    x = "days",
+    y = "basic reproduction number"
+  )
+```
+
+## References
+
+Atkeson, A. (2020). What will be the economic impact of COVID-19 in the US? Rough estimates of disease scenarios," NBER Working Paper 26867.
