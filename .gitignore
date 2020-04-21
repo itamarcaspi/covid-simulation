@@ -6,3 +6,9 @@
 docs/
 lit/
 replications/
+joshua-gans-book/
+seir-model_files/
+data/
+
+covid-plots.*
+credit_analysis.*

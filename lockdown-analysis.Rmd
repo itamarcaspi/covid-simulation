@@ -1,0 +1,67 @@
+---
+title: "Lockdowns"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# remotes::install_github("joachim-gassen/tidycovid19")
+library(tidyverse)
+library(tidycovid19)
+library(lubridate)
+library(scales)
+```
+
+```{r}
+# Download latest data
+merged <- download_merged_data(cached = TRUE)
+```
+
+```{r}
+# OECD countries list
+oecd_list <- c("AUS", "AUT", "BEL", "CAN", "CHL", "CZE",
+               "DNK", "EST", "FIN", "FRA", "DEU", "GRC",
+               "HUN", "ISL", "IRL", "ISR", "ITA", "JPN",
+               "KOR", "LVA", "LTU", "LUX", "MEX", "NLD",
+               "NZL", "NOR", "POL", "PRT", "SVK", "SVN",
+               "ESP", "SWE", "CHE", "TUR", "GBR", "USA",
+               "BRA", "CHN", "COL", "CRI", "IND", "IDN",
+               "RUS", "ZAF")
+```
+
+```{r}
+df <- merged %>% 
+  filter(iso3c %in% oecd_list) %>% 
+  mutate(date = ymd(date))
+```
+
+```{r}
+lock <- df %>% 
+  select(date, iso3c, lockdown, deaths, soc_dist, gcmr_retail_recreation) %>% 
+  drop_na() %>% 
+  group_by(date) %>% 
+  summarise(
+    sum_lockdown     = sum(lockdown != 0),
+    sum_soc_dist     = sum(soc_dist != 0),
+    workplaces       = median(gcmr_retail_recreation),
+    retail           = median(gcmr_retail_recreation),
+    log_sum_deaths   = log(sum(deaths)),
+    sum_deaths       = sum(deaths)
+  ) 
+
+lock %>% 
+  select(date, sum_deaths, sum_lockdown) %>% 
+  pivot_longer(-date, names_to = "type", values_to = "value") %>% 
+  ggplot(aes(date, value)) +
+  geom_line(size = 1) +
+  facet_wrap(~ type, scales = "free", ncol = 1)+
+  theme_light() +
+  labs(
+    y = "",
+    x = ""
+  ) +
+  scale_x_date(labels = date_format("%d-%m"))
+```
